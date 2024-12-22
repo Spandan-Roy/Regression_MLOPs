@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import dill
 import pickle
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import GridSearchCV
 
 from src.exception import CustomException
@@ -22,32 +22,43 @@ def save_object(file_path, obj):
     except Exception as e:
         raise CustomException(e, sys)
     
-def evaluate_models(X_train, y_train,X_test,y_test,models):
+
+def evaluate_models(X_train, y_train, X_test, y_test, models, param):
     try:
         report = {}
 
-        for i in range(len(list(models))):
-            model = list(models.values())[i]
-            #para=param[list(models.keys())[i]]
+        for model_name, model in models.items():
+            para = param[model_name]
+            gs = GridSearchCV(model, para, cv=5,error_score=np.nan)
+            gs.fit(X_train, y_train)
 
-            #gs = GridSearchCV(model,para,cv=3)
-            #gs.fit(X_train,y_train)
-            #model=gs.best_estimator_
-            #model.set_params(**gs.best_params_)
-            #model.fit(X_train,y_train)
+            best_model = gs.best_estimator_
 
-            model.fit(X_train, y_train)  # Train model
+            y_train_pred = best_model.predict(X_train)
+            y_test_pred = best_model.predict(X_test)
 
-            y_train_pred = model.predict(X_train)
+            train_r2 = r2_score(y_train, y_train_pred)
+            test_r2 = r2_score(y_test, y_test_pred)
 
-            y_test_pred = model.predict(X_test)
+            train_mae = mean_absolute_error(y_train, y_train_pred)
+            test_mae = mean_absolute_error(y_test, y_test_pred)
 
-            train_model_score = r2_score(y_train, y_train_pred)
+            train_mse = mean_squared_error(y_train, y_train_pred)
+            test_mse = mean_squared_error(y_test, y_test_pred)
 
-            test_model_score = r2_score(y_test, y_test_pred)
+            report[model_name] = {
+                "train_r2": train_r2,
+                "test_r2": test_r2,
+                "train_mae": train_mae,
+                "test_mae": test_mae,
+                "train_mse": train_mse,
+                "test_mse": test_mse,
+                "best_params": gs.best_params_
+            }
 
-            report[list(models.keys())[i]] = test_model_score
-
+        # Select the best model based on test R-squared score
+        best_model_name = max(report, key=lambda x: report[x]["test_r2"])
+        print(f"Best model: {best_model_name}")
         return report
 
     except Exception as e:
